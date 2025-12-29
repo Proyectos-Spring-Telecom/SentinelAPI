@@ -6,47 +6,52 @@ import {
   Patch,
   Param,
   Delete,
-  Put,
   UseGuards,
   ParseIntPipe,
   Request,
 } from '@nestjs/common';
-import { UsuariosService } from './usuarios.service';
-import { CreateUsuarioDto } from './dto/create-usuario.dto';
-import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import { UpdateUsuarioEstatusDto } from './dto/update-usuario-estatus.dto';
-import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
-import { ApiResponseCommon } from 'src/common/ApiResponse';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
-import { ApiCrudResponse } from 'src/common/ApiResponse';
-import { UpdateUsuarioOperadorDto } from './dto/update-usuario-operador.dto';
+import { UsuariosService } from './usuarios.service';
+import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { UpdateUsuarioEstatusDto } from './dto/update-usuario-estatus.dto';
 import { UpdateUsuarioContrasena } from './dto/update-usuario-contrasena.dto';
-import { UpdateUsuarioDispositivoDto } from './dto/update-usuario-dispositivo.dto';
+import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { ApiResponseCommon, ApiCrudResponse } from 'src/common/ApiResponse';
 
-@UseGuards(JwtAuthGuard)
 @ApiTags('Usuarios')
 @ApiBearerAuth('bearer-token')
+@UseGuards(JwtAuthGuard)
 @Controller('usuarios')
 export class UsuariosController {
-  constructor(private readonly usuariosService: UsuariosService) { }
+  constructor(private readonly usuariosService: UsuariosService) {}
 
-  // ========================================
-  // 🔹 POST ROUTES (crear recursos)
-  // ========================================
+  // ==================== POST ====================
+
   @Post()
-  @ApiOperation({ summary: 'Registrar un nuevo usuario' })
+  @ApiOperation({ 
+    summary: 'Crear un nuevo usuario',
+    description: 'Registra un nuevo usuario en el sistema asociado al usuario autenticado'
+  })
+  @ApiBody({ type: CreateUsuarioDto })
   @ApiResponse({
     status: 201,
-    description: 'El usuario ha sido creado exitosamente.',
+    description: 'Usuario creado exitosamente',
   })
   @ApiResponse({
     status: 400,
-    description: 'Los datos ingresados no son válidos',
+    description: 'Datos inválidos'
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
   })
   async createUsuario(
     @Body() createUsuarioDto: CreateUsuarioDto,
@@ -56,45 +61,94 @@ export class UsuariosController {
     return await this.usuariosService.createUsuario(createUsuarioDto, idUser);
   }
 
-  // ========================================
-  // 🔹 GET ROUTES - Rutas específicas primero
-  // ========================================
+  // ==================== GET ====================
+
   @Get('list')
-  @ApiOperation({ summary: 'Obtener todos los usuarios sin paginación' })
-  @ApiResponse({ status: 200, description: 'Lista completa de usuarios' })
+  @ApiOperation({ 
+    summary: 'Obtener lista completa de usuarios',
+    description: 'Obtiene todos los usuarios sin paginación según el rol y permisos'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Lista completa de usuarios obtenida exitosamente',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
   async findAllList(@Request() req): Promise<ApiResponseCommon> {
-    const cliente = req.user.cliente;
+    const idCliente = req.user.idCliente;
     const rol = req.user.rol;
-    return await this.usuariosService.getAllListUsuarios(+cliente, +rol);
+    return await this.usuariosService.getAllListUsuarios(+idCliente, +rol);
   }
 
-  @Get('list/cliente')
-  @ApiOperation({ summary: 'Obtener usuarios por cliente específico' })
-  @ApiResponse({ status: 200, description: 'Lista de usuarios del cliente' })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
+  @Get('list/cliente/:id')
+  @ApiOperation({ 
+    summary: 'Obtener usuarios por cliente específico',
+    description: 'Obtiene la lista de usuarios asociados a un cliente específico'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del cliente',
+    example: 1
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Lista de usuarios del cliente obtenida exitosamente',
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Cliente no encontrado' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
   async findAllListUsuarioCliente(
     @Param('id', ParseIntPipe) id: number,
     @Request() req,
   ): Promise<ApiResponseCommon> {
-    const cliente = req.user.cliente;
-    const rol = req.user.rol;
-    return await this.usuariosService.getAllListUsuariosCliente(id, +cliente);
+    const idCliente = req.user.idCliente;
+    return await this.usuariosService.getAllListUsuariosCliente(id, +idCliente);
   }
 
   @Get(':page/:limit')
-  @ApiOperation({ summary: 'Obtener usuarios con paginación' })
-  @ApiResponse({ status: 200, description: 'Lista de usuarios paginada' })
+  @ApiOperation({ 
+    summary: 'Obtener usuarios con paginación',
+    description: 'Obtiene una lista paginada de usuarios según los parámetros especificados'
+  })
+  @ApiParam({
+    name: 'page',
+    type: 'number',
+    description: 'Número de página',
+    example: 1
+  })
+  @ApiParam({
+    name: 'limit',
+    type: 'number',
+    description: 'Cantidad de registros por página',
+    example: 10
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Usuarios obtenidos exitosamente con paginación',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
   async findAll(
     @Param('page', ParseIntPipe) page: number,
     @Param('limit', ParseIntPipe) limit: number,
     @Request() req,
   ): Promise<ApiResponseCommon> {
-    const cliente = req.user.cliente;
+    const idCliente = req.user.idCliente;
     const rol = req.user.rol;
     const idUser = req.user.userId;
     return await this.usuariosService.getAllUsuario(
       +idUser,
-      +cliente,
+      +idCliente,
       +rol,
       page,
       limit,
@@ -102,70 +156,63 @@ export class UsuariosController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener usuario por ID' })
-  @ApiResponse({ status: 200, description: 'Usuario encontrado' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
-    const cliente = req.user.cliente;
-    const rol = req.user.rol;
-    return this.usuariosService.getUsuarioByID(+id, +cliente, +rol);
-  }
-
-  // ========================================
-  // 🔹 PUT ROUTES (actualización completa)
-  // ========================================
-
-  @Put('actualizar/contrasena/:id')
-  @ApiOperation({ summary: 'Cambiar contraseña de usuario' })
-  @ApiResponse({
-    status: 200,
-    description: 'Contraseña actualizada exitosamente',
+  @ApiOperation({ 
+    summary: 'Obtener usuario por ID',
+    description: 'Obtiene la información detallada de un usuario específico por su ID'
   })
-  @ApiResponse({ status: 400, description: 'Contraseña inválida' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async updateContrasena(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateUsuarioContrasena: UpdateUsuarioContrasena,
-    @Request() req,
-  ): Promise<ApiCrudResponse> {
-    const idUser = req.user.userId;
-    return await this.usuariosService.updateContrasena(
-      id,
-      idUser,
-      updateUsuarioContrasena,
-    );
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del usuario',
+    example: 1
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Usuario encontrado exitosamente'
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Usuario no encontrado' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number, 
+    @Request() req
+  ) {
+    const idCliente = req.user.idCliente;
+    const rol = req.user.rol;
+    return this.usuariosService.getUsuarioByID(+id, +idCliente, +rol);
   }
 
-  // ========================================
-  // 🔹 PUT ACTUALIZAR USUARIO
-  // ========================================
-
-  @Put(':id')
-  @ApiOperation({ summary: 'Actualizar información completa del usuario' })
-  @ApiResponse({ status: 200, description: 'Usuario actualizado exitosamente' })
-  @ApiResponse({ status: 400, description: 'Datos inválidos' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async updateUsuario(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateUsuarioDto: UpdateUsuarioDto,
-    @Request() req,
-  ): Promise<ApiCrudResponse> {
-    const idUser = req.user.userId;
-    return await this.usuariosService.updateUsuario(
-      id,
-      updateUsuarioDto,
-      idUser,
-    );
-  }
-
-  // ========================================
-  // 🔹 PATCH ROUTES (actualización parcial)
-  // ========================================
+  // ==================== PATCH ====================
 
   @Patch('estatus/:id')
-  @ApiOperation({ summary: 'Cambiar estatus del usuario (activar/desactivar)' })
-  @ApiResponse({ status: 200, description: 'Estatus actualizado exitosamente' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  @ApiOperation({ 
+    summary: 'Cambiar estatus del usuario',
+    description: 'Actualiza el estatus de un usuario (activar/desactivar)'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del usuario',
+    example: 1
+  })
+  @ApiBody({ type: UpdateUsuarioEstatusDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Estatus actualizado exitosamente',
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Usuario no encontrado' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
   async changeUsuarioEstatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUsuarioEstatusDto: UpdateUsuarioEstatusDto,
@@ -179,15 +226,117 @@ export class UsuariosController {
     );
   }
 
-  // ========================================
-  // 🔹 DELETE ROUTES
-  // ========================================
+  @Patch('actualizar/contrasena/:id')
+  @ApiOperation({ 
+    summary: 'Cambiar contraseña de usuario',
+    description: 'Actualiza la contraseña de un usuario específico'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del usuario',
+    example: 1
+  })
+  @ApiBody({ type: UpdateUsuarioContrasena })
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña actualizada exitosamente',
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Contraseña inválida' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Usuario no encontrado' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
+  async updateContrasena(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUsuarioContrasena: UpdateUsuarioContrasena,
+    @Request() req,
+  ): Promise<ApiCrudResponse> {
+    const idUser = req.user.userId;
+    return await this.usuariosService.updateContrasena(
+      id,
+      idUser,
+      updateUsuarioContrasena,
+    );
+  }
+
+  @Patch(':id')
+  @ApiOperation({ 
+    summary: 'Actualizar datos del usuario',
+    description: 'Actualiza la información completa de un usuario existente'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del usuario',
+    example: 1
+  })
+  @ApiBody({ type: UpdateUsuarioDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Usuario actualizado exitosamente',
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Datos inválidos' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Usuario no encontrado' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
+  async updateUsuario(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUsuarioDto: UpdateUsuarioDto,
+    @Request() req,
+  ): Promise<ApiCrudResponse> {
+    const idUser = req.user.userId;
+    return await this.usuariosService.updateUsuario(
+      id,
+      updateUsuarioDto,
+      idUser,
+    );
+  }
+
+  // ==================== DELETE ====================
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Eliminar usuario' })
-  @ApiResponse({ status: 200, description: 'Usuario eliminado exitosamente' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  @ApiResponse({ status: 400, description: 'No se puede eliminar el usuario' })
+  @ApiOperation({ 
+    summary: 'Eliminar usuario',
+    description: 'Elimina un usuario del sistema'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del usuario a eliminar',
+    example: 1
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Usuario eliminado exitosamente',
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Usuario no encontrado' 
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'No se puede eliminar el usuario' 
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado'
+  })
   async deleteUsuario(
     @Param('id', ParseIntPipe) id: number,
     @Request() req,

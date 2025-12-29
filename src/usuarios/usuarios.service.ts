@@ -21,13 +21,11 @@ import {
 import { BitacoraLoggerService } from 'src/bitacora/bitacora.service';
 import { ClientesService } from 'src/clientes/clientes.service';
 import { UsuariosPermisos } from 'src/entities/UsuariosPermisos';
-import { UpdateUsuarioOperadorDto } from './dto/update-usuario-operador.dto';
 import { UpdateUsuarioContrasena } from './dto/update-usuario-contrasena.dto';
 import { MailService } from 'src/mail/mail.service';
 import { JwtService } from '@nestjs/jwt';
 import { Clientes } from 'src/entities/Clientes';
 import { EnumModulos, EstatusEnum } from 'src/common/estatus.enum';
-import { UpdateUsuarioDispositivoDto } from './dto/update-usuario-dispositivo.dto';
 
 @Injectable()
 export class UsuariosService {
@@ -93,7 +91,6 @@ SELECT
   u.ApellidoMaterno AS ApellidoMaterno,
   u.Telefono AS Telefono,
   u.UltimoLogin AS UltimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS FotoPerfil,
   u.FechaCreacion AS FechaCreacion,
   u.FechaActualizacion AS FechaActualizacion,
@@ -144,7 +141,6 @@ SELECT
   u.ApellidoMaterno AS ApellidoMaterno,
   u.Telefono AS Telefono,
   u.UltimoLogin AS UltimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS FotoPerfil,
   u.FechaCreacion AS FechaCreacion,
   u.FechaActualizacion AS FechaActualizacion,
@@ -239,7 +235,6 @@ SELECT
   u.ApellidoMaterno AS ApellidoMaterno,
   u.Telefono AS Telefono,
   u.UltimoLogin AS UltimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS FotoPerfil,
   u.FechaCreacion AS FechaCreacion,
   u.FechaActualizacion AS FechaActualizacion,
@@ -278,7 +273,6 @@ SELECT
   u.ApellidoMaterno AS ApellidoMaterno,
   u.Telefono AS Telefono,
   u.UltimoLogin AS UltimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS FotoPerfil,
   u.FechaCreacion AS FechaCreacion,
   u.FechaActualizacion AS FechaActualizacion,
@@ -384,7 +378,6 @@ SELECT
   u.ApellidoMaterno AS apellidoMaterno,
   u.Telefono AS telefono,
   u.UltimoLogin AS ultimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS fotoPerfil,
   u.FechaCreacion AS fechaCreacion,
   u.FechaActualizacion AS fechaActualizacion,
@@ -424,7 +417,6 @@ SELECT
   u.ApellidoMaterno AS apellidoMaterno,
   u.Telefono AS telefono,
   u.UltimoLogin AS ultimoLogin,
-  u.DeviceId AS deviceId,
   u.FotoPerfil AS fotoPerfil,
   u.FechaCreacion AS fechaCreacion,
   u.FechaActualizacion AS fechaActualizacion,
@@ -630,6 +622,8 @@ ORDER BY u.Id DESC
           10,
         ); //encriptamos la contraseña
         updateUsuarioContrasena.passwordNueva = hashedPassword;
+      } else {
+        throw new BadRequestException('Las nuevas contraseñas no coinciden. Por favor, verifique la información ingresada e intente nuevamente.')
       }
       //Agregamos le fecha de la actualizacion
       function pad(n: number) {

@@ -476,6 +476,7 @@ ORDER BY Id ASC
       };
       return result;
     } catch (error) {
+      console.log(error)
       //-----Registro en la bitacora----- ERROR
       const querylogger = { updateClienteDto };
       await this.bitacoraLogger.logToBitacora(

@@ -6,7 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  Put,
   UseGuards,
   Request,
   ParseIntPipe,
@@ -17,7 +16,7 @@ import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { UpdateClienteEstatusDto } from './dto/update-clientes-estatus.dto';
 import { ApiCrudResponse, ApiResponseCommon } from 'src/common/ApiResponse';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Clientes')
 @ApiBearerAuth('bearer-token')
@@ -25,86 +24,220 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) { }
-  //Crear cliente
+
+  // ==================== POST ====================
+
   @Post()
-  async createCliente(@Body() createClienteDto: CreateClienteDto, @Request() req): Promise<ApiCrudResponse> {
+  @ApiOperation({
+    summary: 'Crear un nuevo cliente',
+    description: 'Crea un nuevo cliente en el sistema.'
+  })
+  @ApiBody({ type: CreateClienteDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Cliente creado exitosamente',
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async createCliente(
+    @Body() createClienteDto: CreateClienteDto,
+    @Request() req
+  ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
     return await this.clientesService.createCliente(createClienteDto, idUser);
   }
-  //Obtener todos los clientes
+
+  // ==================== GET ====================
+
   @Get('list')
-  async getAllListClientes(@Request() req,): Promise<ApiResponseCommon> {
-    const cliente = req.user.cliente;
+  @ApiOperation({
+    summary: 'Obtener lista completa de clientes',
+    description: 'Obtiene todos los clientes según el rol y permisos del usuario'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de clientes obtenida exitosamente',
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async getAllListClientes(@Request() req): Promise<ApiResponseCommon> {
+    const idCliente = req.user.idCliente;
     const idUser = req.user.userId;
     const rol = req.user.rol;
-    return this.clientesService.getAllListClientes(+idUser, +cliente, +rol);
+    return this.clientesService.getAllListClientes(+idUser, +idCliente, +rol);
   }
 
-  //Obtener todos los clientes
   @Get('list/:cliente')
+  @ApiOperation({
+    summary: 'Obtener lista de clientes por ID de cliente',
+    description: 'Obtiene todos los clientes filtrados por un ID de cliente específico'
+  })
+  @ApiParam({
+    name: 'cliente',
+    type: 'number',
+    description: 'ID del cliente',
+    example: 1
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de clientes obtenida exitosamente',
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
   async getAllListClientesId(
-    @Param('cliente', ParseIntPipe) cliente: number,
-    @Request() req,): Promise<ApiResponseCommon> {
+    @Param('cliente', ParseIntPipe) idCliente: number,
+    @Request() req
+  ): Promise<ApiResponseCommon> {
     const idUser = req.user.userId;
     const rol = req.user.rol;
-    return this.clientesService.getAllListClientesId(+idUser, +cliente, +rol);
+    return this.clientesService.getAllListClientesId(+idUser, +idCliente, +rol);
   }
 
-  //Obtener todos los clientes con paginado
   @Get(':page/:limit')
-  getAllClientes(
+  @ApiOperation({
+    summary: 'Obtener clientes con paginación',
+    description: 'Obtiene una lista paginada de clientes según los parámetros especificados'
+  })
+  @ApiParam({
+    name: 'page',
+    type: 'number',
+    description: 'Número de página',
+    example: 1
+  })
+  @ApiParam({
+    name: 'limit',
+    type: 'number',
+    description: 'Cantidad de registros por página',
+    example: 10
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clientes obtenidos exitosamente con paginación',
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async getAllClientes(
     @Param('page', ParseIntPipe) page: number,
     @Param('limit', ParseIntPipe) limit: number,
-    @Request() req,
+    @Request() req
   ): Promise<ApiResponseCommon> {
-    const cliente = req.user.cliente;
+    const idCliente = req.user.idCliente;
     const idUser = req.user.userId;
     const rol = req.user.rol;
-    return this.clientesService.getAllClientes(+idUser, +cliente, +rol, page, limit);
+    return this.clientesService.getAllClientes(+idUser, +idCliente, +rol, page, limit);
   }
 
-  //Obtener solo un cliente
   @Get(':id')
-  getOneCliente(@Param('id') id: string, @Request() req,) {
-    const cliente = req.user.cliente;
-    const idUser = req.user.userId;
-    const rol = req.user.rol;
-    return this.clientesService.getOneCliente(+id);
+  @ApiOperation({
+    summary: 'Obtener un cliente específico',
+    description: 'Obtiene la información detallada de un cliente por su ID'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del cliente',
+    example: 1
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cliente obtenido exitosamente'
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
+  async getOneCliente(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req
+  ) {
+    return this.clientesService.getOneCliente(id);
   }
 
-  //Actualizar el estatus del cliente
+  // ==================== PATCH ====================
+
   @Patch('estatus/:id')
-  updateEstatusClientes(
-    @Param('id') id: string,
+  @ApiOperation({
+    summary: 'Actualizar estatus de un cliente',
+    description: 'Actualiza el estatus (activo/inactivo) de un cliente específico'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del cliente',
+    example: 1
+  })
+  @ApiBody({ type: UpdateClienteEstatusDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Estatus actualizado exitosamente',
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
+  async updateEstatusClientes(
+    @Param('id', ParseIntPipe) id: number,
     @Request() req,
-    @Body() updateClienteEstatusDto: UpdateClienteEstatusDto,
+    @Body() updateClienteEstatusDto: UpdateClienteEstatusDto
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    const cliente = req.user.cliente;
+    const idCliente = req.user.idCliente;
     return this.clientesService.updateClienteStatus(
-      +id,
+      id,
       idUser,
-      +cliente,
-      updateClienteEstatusDto,
+      +idCliente,
+      updateClienteEstatusDto
     );
   }
 
-  //Actualizar un cliente
-  @Put(':id')
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Actualizar datos de un cliente',
+    description: 'Actualiza la información de un cliente existente'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del cliente',
+    example: 1
+  })
+  @ApiBody({ type: UpdateClienteDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Cliente actualizado exitosamente',
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
   async updateCliente(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Request() req,
-    @Body() updateClienteDto: UpdateClienteDto,
+    @Body() updateClienteDto: UpdateClienteDto
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    return await this.clientesService.updateCliente(+id, idUser, updateClienteDto);
+    return await this.clientesService.updateCliente(id, idUser, updateClienteDto);
   }
 
-  //Eliminar Cliente
+  // ==================== DELETE ====================
+
   @Delete(':id')
-  async removeClientes(@Param('id') id: string, @Request() req): Promise<ApiCrudResponse> {
+  @ApiOperation({
+    summary: 'Eliminar un cliente',
+    description: 'Elimina un cliente del sistema'
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del cliente a eliminar',
+    example: 1
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cliente eliminado exitosamente',
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
+  async removeClientes(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req
+  ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    const cliente = req.user.cliente;
-    return await this.clientesService.removeCliente(+id, idUser, +cliente);
+    const idCliente = req.user.ididCliente;
+    return await this.clientesService.removeCliente(id, idUser, +idCliente);
   }
 }
