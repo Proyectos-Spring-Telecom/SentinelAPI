@@ -322,11 +322,11 @@ export class PermisosService {
               Permisos.Nombre AS PermisoNombre,
               Permisos.Descripcion AS PermisoDescripcion
             FROM 
-			TransmoviDev.UsuariosPermisos
+			Sentinel.UsuariosPermisos
             INNER JOIN 
-              TransmoviDev.Permisos ON UsuariosPermisos.IdPermiso = Permisos.Id
+              Sentinel.Permisos ON UsuariosPermisos.IdPermiso = Permisos.Id
             INNER JOIN 
-             TransmoviDev.Modulos ON Permisos.IdModulo = Modulos.Id
+             Sentinel.Modulos ON Permisos.IdModulo = Modulos.Id
             WHERE 
               UsuariosPermisos.IdUsuario = '${idUsuario}'`;
 
