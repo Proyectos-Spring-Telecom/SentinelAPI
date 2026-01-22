@@ -24,11 +24,14 @@ import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { UpdateUsuarioEstatusDto } from './dto/update-usuario-estatus.dto';
 import { UpdateUsuarioContrasena } from './dto/update-usuario-contrasena.dto';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { RolesGuard } from 'src/guard/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApiResponseCommon, ApiCrudResponse } from 'src/common/ApiResponse';
 
 @ApiTags('Usuarios')
 @ApiBearerAuth('bearer-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles() // Todos los roles pueden acceder por defecto
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
@@ -52,6 +55,10 @@ export class UsuariosController {
   @ApiResponse({
     status: 401,
     description: 'No autorizado'
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso denegado - Solo SuperAdministrador o Administrador pueden crear usuarios'
   })
   async createUsuario(
     @Body() createUsuarioDto: CreateUsuarioDto,
@@ -311,6 +318,7 @@ export class UsuariosController {
   // ==================== DELETE ====================
 
   @Delete(':id')
+  @Roles(1) // Solo SuperAdministrador puede eliminar usuarios
   @ApiOperation({ 
     summary: 'Eliminar usuario',
     description: 'Elimina un usuario del sistema'
@@ -336,6 +344,10 @@ export class UsuariosController {
   @ApiResponse({
     status: 401,
     description: 'No autorizado'
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso denegado - Solo SuperAdministrador puede eliminar usuarios'
   })
   async deleteUsuario(
     @Param('id', ParseIntPipe) id: number,

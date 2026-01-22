@@ -17,18 +17,22 @@ import { CreateRolDto } from './dto/create-rol.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { ApiCrudResponse, ApiResponseCommon } from 'src/common/ApiResponse';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { RolesGuard } from 'src/guard/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { UpdateRolEstatusDto } from './dto/update-rol.dto';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Roles')
 @ApiBearerAuth('bearer-token')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(1, 2, 3) // Todos los roles pueden acceder por defecto
 @Controller('roles')
-@UseGuards(JwtAuthGuard)
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Post()
+  @Roles(1) // Solo SuperAdministrador puede crear roles
   create(@Body() createRoleDto: CreateRolDto, @Request() req) {
     const idUser = req.user.userId;
     const cliente = req.user.cliente;
@@ -87,6 +91,7 @@ export class RolesController {
   }
 
   @Delete(':id')
+  @Roles(1) // Solo SuperAdministrador puede eliminar roles
   remove(@Param('id') id: string, @Request() req) {
     const idUser = req.user.userId;
     return this.rolesService.remove(+id, idUser);

@@ -20,15 +20,19 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UpdateModulosEstatusDto } from './dto/update-modulo-estatus.dto';
 import { ApiCrudResponse, ApiResponseCommon } from 'src/common/ApiResponse';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { RolesGuard } from 'src/guard/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Modulos')
 @ApiBearerAuth('bearer-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(1, 2, 3) // Todos los roles pueden acceder por defecto
 @Controller('modulos')
 export class ModulosController {
   constructor(private readonly modulosService: ModulosService) {}
 
   @Post()
+  @Roles(1) // Solo SuperAdministrador puede crear módulos
   async create(
     @Body() createModuloDto: CreateModuloDto,
     @Request() req,
@@ -80,6 +84,7 @@ export class ModulosController {
   }
 
   @Delete(':id')
+  @Roles(1) // Solo SuperAdministrador puede eliminar módulos
   async remove(@Param('id',ParseIntPipe)id:number,@Request()req):Promise <ApiCrudResponse> {
     const idUser = req.user.userId;
     return await this.modulosService.deleteModulo(id,idUser);

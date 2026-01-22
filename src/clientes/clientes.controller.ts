@@ -14,13 +14,16 @@ import { ClientesService } from './clientes.service';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { RolesGuard } from 'src/guard/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { UpdateClienteEstatusDto } from './dto/update-clientes-estatus.dto';
 import { ApiCrudResponse, ApiResponseCommon } from 'src/common/ApiResponse';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Clientes')
 @ApiBearerAuth('bearer-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(1, 2, 3) // Todos los roles pueden acceder por defecto
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) { }
@@ -28,6 +31,7 @@ export class ClientesController {
   // ==================== POST ====================
 
   @Post()
+  @Roles(1) // Solo SuperAdministrador puede crear clientes
   @ApiOperation({
     summary: 'Crear un nuevo cliente',
     description: 'Crea un nuevo cliente en el sistema.'
@@ -39,6 +43,7 @@ export class ClientesController {
   })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado - Solo SuperAdministrador puede crear clientes' })
   async createCliente(
     @Body() createClienteDto: CreateClienteDto,
     @Request() req
@@ -216,6 +221,7 @@ export class ClientesController {
   // ==================== DELETE ====================
 
   @Delete(':id')
+  @Roles(1) // Solo SuperAdministrador puede eliminar clientes
   @ApiOperation({
     summary: 'Eliminar un cliente',
     description: 'Elimina un cliente del sistema'
@@ -231,6 +237,7 @@ export class ClientesController {
     description: 'Cliente eliminado exitosamente',
   })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado - Solo SuperAdministrador puede eliminar clientes' })
   @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
   async removeClientes(
     @Param('id', ParseIntPipe) id: number,
