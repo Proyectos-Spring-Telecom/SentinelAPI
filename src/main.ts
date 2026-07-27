@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe} from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpStringResponseFilter } from './utils/http-string-response.filter';
 
@@ -17,9 +17,10 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Sentinel API')
-    .setDescription('Documentación de la API de SENTINEL') 
-    .setVersion('1.0') 
+    .setDescription('Documentación de la API de SENTINEL')
+    .setVersion('1.0')
     .addServer('http://localhost:3010', 'Servidor Local')
+    .addServer('https://springtelecom.mx/sentinelAPI', 'Servidor Prod')
     .addBearerAuth(
       {
         type: 'http',
@@ -47,16 +48,16 @@ async function bootstrap() {
       persistAuthorization: true,
       defaultModelsExpandDepth: -1,
     },
-  }); 
-  
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,       
-      forbidNonWhitelisted: true, 
-      transform: true,      
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
-  
+
   await app.listen(process.env.PORT ?? 3010);
 }
 bootstrap();
