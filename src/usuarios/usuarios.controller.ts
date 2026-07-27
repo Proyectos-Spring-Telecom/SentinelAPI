@@ -9,6 +9,8 @@ import {
   UseGuards,
   ParseIntPipe,
   Request,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -17,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
@@ -27,6 +30,7 @@ import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { RolesGuard } from 'src/guard/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApiResponseCommon, ApiCrudResponse } from 'src/common/ApiResponse';
+import { usuariosFileFieldsInterceptor } from './usuarios-upload.interceptor';
 
 @ApiTags('Usuarios')
 @ApiBearerAuth('bearer-token')
@@ -39,33 +43,80 @@ export class UsuariosController {
   // ==================== POST ====================
 
   @Post()
-  @ApiOperation({ 
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(usuariosFileFieldsInterceptor())
+  @ApiOperation({
     summary: 'Crear un nuevo usuario',
-    description: 'Registra un nuevo usuario en el sistema asociado al usuario autenticado'
+    description:
+      'Registra un nuevo usuario. La foto de perfil (opcional) se envía como archivo multipart en el campo fotoPerfil y se sube a S3.',
   })
-  @ApiBody({ type: CreateUsuarioDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: [
+        'userName',
+        'passwordHash',
+        'emailConfirmado',
+        'nombre',
+        'apellidoPaterno',
+        'idRol',
+        'idCliente',
+        'permisosIds',
+      ],
+      properties: {
+        userName: { type: 'string', example: 'usuario01' },
+        passwordHash: { type: 'string', example: 'P@ssword123' },
+        emailConfirmado: { type: 'number', example: 0 },
+        nombre: { type: 'string', example: 'Juan' },
+        apellidoPaterno: { type: 'string', example: 'Pérez' },
+        apellidoMaterno: { type: 'string', example: 'López' },
+        telefono: { type: 'string', example: '5512345678' },
+        idRol: { type: 'number', example: 2 },
+        idCliente: { type: 'number', example: 5 },
+        permisosIds: {
+          type: 'string',
+          example: '[1,2,3]',
+          description: 'JSON array o CSV de IDs de permisos',
+        },
+        estatus: { type: 'number', example: 1 },
+        fotoPerfil: {
+          type: 'string',
+          format: 'binary',
+          description: 'Imagen de perfil (PNG/JPG/JPEG), opcional',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Usuario creado exitosamente',
   })
   @ApiResponse({
     status: 400,
-    description: 'Datos inválidos'
+    description: 'Datos inválidos',
   })
   @ApiResponse({
     status: 401,
-    description: 'No autorizado'
+    description: 'No autorizado',
   })
   @ApiResponse({
     status: 403,
-    description: 'Acceso denegado - Solo SuperAdministrador o Administrador pueden crear usuarios'
+    description:
+      'Acceso denegado - Solo SuperAdministrador o Administrador pueden crear usuarios',
   })
   async createUsuario(
     @Body() createUsuarioDto: CreateUsuarioDto,
+    @UploadedFiles()
+    files: { fotoPerfil?: Express.Multer.File[] },
     @Request() req,
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    return await this.usuariosService.createUsuario(createUsuarioDto, idUser);
+    const fileFotoPerfil = files?.fotoPerfil?.[0];
+    return await this.usuariosService.createUsuario(
+      createUsuarioDto,
+      idUser,
+      fileFotoPerfil,
+    );
   }
 
   // ==================== GET ====================
@@ -275,43 +326,74 @@ export class UsuariosController {
   }
 
   @Patch(':id')
-  @ApiOperation({ 
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(usuariosFileFieldsInterceptor())
+  @ApiOperation({
     summary: 'Actualizar datos del usuario',
-    description: 'Actualiza la información completa de un usuario existente'
+    description:
+      'Actualiza un usuario. Si llega un archivo en fotoPerfil, se sube a S3, se actualiza la URL y se elimina la imagen anterior en segundo plano.',
   })
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'ID del usuario',
-    example: 1
+    example: 1,
   })
-  @ApiBody({ type: UpdateUsuarioDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        emailConfirmado: { type: 'number', example: 1 },
+        nombre: { type: 'string', example: 'Juan' },
+        apellidoPaterno: { type: 'string', example: 'Pérez' },
+        apellidoMaterno: { type: 'string', example: 'López' },
+        telefono: { type: 'string', example: '5512345678' },
+        idRol: { type: 'number', example: 2 },
+        idCliente: { type: 'number', example: 5 },
+        permisosIds: {
+          type: 'string',
+          example: '[1,2,3]',
+          description: 'JSON array o CSV de IDs de permisos',
+        },
+        estatus: { type: 'number', example: 1 },
+        fotoPerfil: {
+          type: 'string',
+          format: 'binary',
+          description: 'Nueva imagen de perfil (PNG/JPG/JPEG), opcional',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
     description: 'Usuario actualizado exitosamente',
   })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Datos inválidos' 
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Usuario no encontrado' 
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
   })
   @ApiResponse({
     status: 401,
-    description: 'No autorizado'
+    description: 'No autorizado',
   })
   async updateUsuario(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUsuarioDto: UpdateUsuarioDto,
+    @UploadedFiles()
+    files: { fotoPerfil?: Express.Multer.File[] },
     @Request() req,
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
+    const fileFotoPerfil = files?.fotoPerfil?.[0];
     return await this.usuariosService.updateUsuario(
       id,
       updateUsuarioDto,
       idUser,
+      fileFotoPerfil,
     );
   }
 

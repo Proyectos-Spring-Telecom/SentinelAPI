@@ -11,6 +11,7 @@ import { UsuariosPermisos } from 'src/entities/UsuariosPermisos';
 import { MailModule } from 'src/mail/mail.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { Clientes } from 'src/entities/Clientes';
+import { S3Module } from 'src/s3/s3.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { Clientes } from 'src/entities/Clientes';
     ClientesModule,
     PermisosModule,
     MailModule,
-    AuthModule
+    AuthModule,
+    S3Module,
   ],
   controllers: [UsuariosController],
   providers: [UsuariosService],

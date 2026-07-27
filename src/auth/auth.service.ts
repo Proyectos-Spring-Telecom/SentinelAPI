@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { Usuarios } from 'src/entities/Usuarios';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -23,6 +23,9 @@ import { CodigoAutenticacion } from 'src/entities/CodigoAutenticacion';
 import { EstatusEnum, TipoCodigoAutenticacion } from 'src/common/estatus.enum';
 import { CodigoPasajeroAutenticacion } from './dto/login-autenticacion.dto';
 import { horaDesfasada } from 'src/utils/correccion-hora';
+import { RefreshSessions } from 'src/entities/RefreshSessions';
+import { AuthTokensService } from './auth-tokens.service';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Injectable()
 export class AuthService {
@@ -33,9 +36,13 @@ export class AuthService {
     private permisosRepository: Repository<UsuariosPermisos>,
     @InjectRepository(CodigoAutenticacion)
     private codigoAutenticacioRepository: Repository<CodigoAutenticacion>,
+    @InjectRepository(RefreshSessions)
+    private readonly refreshSessionsRepository: Repository<RefreshSessions>,
     private readonly jwtService: JwtService,
     private readonly emailService: MailService,
     private readonly bitacoraLogger: BitacoraLoggerService,
+    private readonly authTokensService: AuthTokensService,
+    private readonly dataSource: DataSource,
   ) { }
 
   /*   // ========================================
@@ -374,7 +381,7 @@ export class AuthService {
   async signIn(loginAuthDto: LoginAuthDto) {
     try {
       const user = await this.usuariosRepository.findOne({
-        relations: ['idRol2', 'cliente2'],
+        relations: ['cliente2'],
         where: {
           userName: loginAuthDto.userName,
           estatus: 1,
@@ -382,69 +389,238 @@ export class AuthService {
           cliente2: {
             estatus: 1,
           },
-
         },
       });
-      if (!user) {
-        throw new NotFoundException('No se encontró al usuario.');
-      }
 
+      // Mismo 401 para no enumerar usuarios
       if (
         !user ||
+        !user.passwordHash ||
         !(await bcrypt.compare(loginAuthDto.password, user.passwordHash))
       ) {
-        console.log({
-          user: user,
-          message: 'Entro a verificar los valores y no son iguales',
-        });
-        throw new UnauthorizedException('Credenciales invalidas');
+        throw new UnauthorizedException('Credenciales inválidas');
       }
-
-      const permisos = await this.permisosRepository.find({
-        select: ['idPermiso'],
-        where: { idUsuario: user.id, estatus: 1 },
-      });
-
-      const payload = {
-        id: user.id,
-        email: user.userName,
-        idCliente: user.idCliente,
-        rol: user.idRol,
-      };
 
       const { fechaActual } = await horaDesfasada();
       await this.usuariosRepository.update(user.id, {
         ultimoLogin: fechaActual,
       });
 
+      const token = this.authTokensService.signAccessToken(user);
+      const {
+        token: refreshToken,
+        jti,
+        expiresAt,
+      } = this.authTokensService.signRefreshToken(Number(user.id));
+
+      await this.refreshSessionsRepository.save(
+        this.refreshSessionsRepository.create({
+          idUsuario: Number(user.id),
+          jti,
+          tokenHash: this.authTokensService.hashRefreshToken(refreshToken),
+          expiresAt,
+          revokedAt: null,
+          replacedById: null,
+        }),
+      );
 
       return {
-        message: `login exitoso`,
-        id: Number(`${user.id}`),
-        nombre: `${user.nombre}`,
-        apellidoPaterno: `${user.apellidoPaterno}`,
-        apellidoMaterno: `${user.apellidoMaterno}`,
-        idCliente: Number(`${user.idCliente}`),
-        nombreCliente: `${user.cliente2?.nombre}`,
-        apellidoPaternoCliente: `${user.cliente2?.apellidoPaterno}`,
-        apellidoMaternoCliente: `${user.cliente2?.apellidoMaterno}`,
-        logotipo: `${user.cliente2.logotipo}`,
-        telefono: `${user.telefono}`,
-        ultimoLogin: `${user.ultimoLogin}`,
-        fechaCreacion: `${user.fechaCreacion}`,
-        fotoPerfil: `${user.fotoPerfil}`,
-        userName: `${user.userName}`,
-        rol: user.idRol2,
-        token: this.jwtService.sign(payload),
-        permisos: permisos,
+        token,
+        refreshToken,
       };
     } catch (error) {
-      console.log(error)
       if (error instanceof HttpException) {
         throw error;
       }
       throw new InternalServerErrorException(error);
     }
+  }
+
+  // ========================================
+  // Perfil del usuario autenticado (/me)
+  // ========================================
+  async getMe(userId: number) {
+    const user = await this.usuariosRepository.findOne({
+      relations: ['idRol2', 'cliente2'],
+      where: {
+        id: Number(userId),
+        estatus: 1,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no autorizado');
+    }
+
+    const permisos = await this.permisosRepository.find({
+      select: ['idPermiso'],
+      where: {
+        idUsuario: Number(user.id),
+        estatus: 1,
+      },
+    });
+
+    // Misma forma de datos que el login anterior (sin token/refreshToken)
+    return {
+      message: 'Perfil obtenido exitosamente',
+      id: Number(`${user.id}`),
+      nombre: `${user.nombre ?? ''}`,
+      apellidoPaterno: `${user.apellidoPaterno ?? ''}`,
+      apellidoMaterno: `${user.apellidoMaterno ?? ''}`,
+      idCliente: Number(`${user.idCliente}`),
+      nombreCliente: `${user.cliente2?.nombre ?? ''}`,
+      apellidoPaternoCliente: `${user.cliente2?.apellidoPaterno ?? ''}`,
+      apellidoMaternoCliente: `${user.cliente2?.apellidoMaterno ?? ''}`,
+      logotipo: `${user.cliente2?.logotipo ?? ''}`,
+      telefono: `${user.telefono ?? ''}`,
+      ultimoLogin: `${user.ultimoLogin ?? ''}`,
+      fechaCreacion: `${user.fechaCreacion ?? ''}`,
+      fotoPerfil: `${user.fotoPerfil ?? ''}`,
+      userName: `${user.userName ?? ''}`,
+      rol: user.idRol2,
+      permisos,
+    };
+  }
+
+  // ========================================
+  // Refresh token (rotación obligatoria)
+  // ========================================
+  async refreshTokens(dto: RefreshTokenDto) {
+    let payload: { id?: number; type?: string; jti?: string };
+
+    try {
+      payload = this.jwtService.verify(dto.refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
+    } catch {
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
+
+    if (
+      payload?.type !== 'refresh' ||
+      !payload?.jti ||
+      payload?.id === undefined ||
+      payload?.id === null
+    ) {
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
+
+    const session = await this.refreshSessionsRepository.findOne({
+      where: {
+        jti: payload.jti,
+        idUsuario: Number(payload.id),
+      },
+    });
+
+    const tokenHash = this.authTokensService.hashRefreshToken(dto.refreshToken);
+    const now = new Date();
+
+    if (
+      !session ||
+      session.revokedAt != null ||
+      session.tokenHash !== tokenHash ||
+      new Date(session.expiresAt).getTime() <= now.getTime()
+    ) {
+      throw new UnauthorizedException(
+        'Sesión de refresh inválida o revocada',
+      );
+    }
+
+    const user = await this.usuariosRepository.findOne({
+      where: { id: Number(payload.id), estatus: 1 },
+    });
+    if (!user) {
+      throw new UnauthorizedException(
+        'Sesión de refresh inválida o revocada',
+      );
+    }
+
+    const accessToken = this.authTokensService.signAccessToken(user);
+    const {
+      token: newRefreshToken,
+      jti: newJti,
+      expiresAt: newExpiresAt,
+    } = this.authTokensService.signRefreshToken(Number(user.id));
+
+    await this.dataSource.transaction(async (manager) => {
+      const newSession = await manager.save(
+        RefreshSessions,
+        manager.create(RefreshSessions, {
+          idUsuario: Number(user.id),
+          jti: newJti,
+          tokenHash: this.authTokensService.hashRefreshToken(newRefreshToken),
+          expiresAt: newExpiresAt,
+          revokedAt: null,
+          replacedById: null,
+        }),
+      );
+
+      await manager.update(RefreshSessions, session.id, {
+        revokedAt: now,
+        replacedById: Number(newSession.id),
+      });
+    });
+
+    return {
+      token: accessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  // ========================================
+  // Logout (idempotente)
+  // ========================================
+  async logoutRefresh(dto: RefreshTokenDto) {
+    try {
+      const payload = this.jwtService.verify(dto.refreshToken, {
+        secret: process.env.JWT_SECRET,
+      }) as { id?: number; type?: string; jti?: string };
+
+      if (
+        payload?.type === 'refresh' &&
+        payload?.jti &&
+        payload?.id !== undefined &&
+        payload?.id !== null
+      ) {
+        const session = await this.refreshSessionsRepository.findOne({
+          where: {
+            jti: payload.jti,
+            idUsuario: Number(payload.id),
+          },
+        });
+
+        const tokenHash = this.authTokensService.hashRefreshToken(
+          dto.refreshToken,
+        );
+
+        if (
+          session &&
+          session.revokedAt == null &&
+          session.tokenHash === tokenHash
+        ) {
+          await this.refreshSessionsRepository.update(session.id, {
+            revokedAt: new Date(),
+          });
+        }
+      }
+    } catch {
+      // Idempotente: no revelar si el token existía o era inválido
+    }
+
+    return { message: 'Sesión cerrada' };
+  }
+
+  // ========================================
+  // Revocación masiva de sesiones activas
+  // ========================================
+  async revokeAllRefreshSessionsForUser(userId: number): Promise<void> {
+    await this.refreshSessionsRepository.update(
+      {
+        idUsuario: Number(userId),
+        revokedAt: IsNull(),
+      },
+      { revokedAt: new Date() },
+    );
   }
 
   // ========================================
@@ -678,6 +854,9 @@ Muchas gracias por su preferencia.`;
       await this.usuariosRepository.update(user.id, {
         passwordHash: hashedPassword,
       });
+
+      await this.revokeAllRefreshSessionsForUser(Number(user.id));
+
       //-----Registro en la bitacora----- SUCCESS
       const querylogger = { id: user.id, EmailConfirmado: 1 };
       await this.bitacoraLogger.logToBitacora(

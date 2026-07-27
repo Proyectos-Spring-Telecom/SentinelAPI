@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -12,6 +13,31 @@ import {
   IsNumber,
   Matches,
 } from 'class-validator';
+
+/** Convierte strings de multipart a número */
+const toNumber = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null || value === '') return value;
+  return Number(value);
+};
+
+/** Convierte permisosIds desde JSON string, CSV o array (multipart) */
+const toNumberArray = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null || value === '') return value;
+  if (Array.isArray(value)) return value.map(Number);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(Number);
+    } catch {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map(Number);
+    }
+  }
+  return value;
+};
 
 export class CreateUsuarioDto {
   @IsString()
@@ -35,6 +61,7 @@ export class CreateUsuarioDto {
   })
   passwordHash: string;
 
+  @Transform(toNumber)
   @IsInt()
   @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
   @ApiProperty({
@@ -88,12 +115,21 @@ export class CreateUsuarioDto {
   @ApiProperty({ description: 'Actualización de contraseña', required: false })
   actualizacionPassword?: string;
 
+  /**
+   * No enviar como archivo aquí. La URL la asigna el servicio tras subir a S3.
+   * Se mantiene opcional por compatibilidad si llega una URL textual.
+   */
   @IsOptional()
   @IsString()
-  @ApiProperty({ description: 'Foto de perfil', required: false })
+  @ApiProperty({
+    description:
+      'URL de foto de perfil (asignada por el backend tras subir a S3). Preferir campo archivo fotoPerfil.',
+    required: false,
+  })
   fotoPerfil?: string;
 
   @IsOptional()
+  @Transform(toNumber)
   @IsInt()
   @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
   @ApiProperty({
@@ -102,17 +138,25 @@ export class CreateUsuarioDto {
   })
   estatus?: number = 1;
 
+  @Transform(toNumber)
   @IsInt()
   @ApiProperty({ description: 'Rol asignado', example: 2 })
   idRol: number;
 
+  @Transform(toNumber)
   @IsInt()
   @ApiProperty({ description: 'Cliente asignado', example: 5 })
   @IsNotEmpty()
   idCliente: number;
 
+  @Transform(toNumberArray)
   @IsNotEmpty()
   @IsArray()
   @IsNumber({}, { each: true })
+  @ApiProperty({
+    description: 'IDs de permisos (JSON array o CSV en multipart)',
+    example: [1, 2, 3],
+    type: [Number],
+  })
   permisosIds: number[];
 }

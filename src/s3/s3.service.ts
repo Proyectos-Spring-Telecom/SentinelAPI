@@ -8,6 +8,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
@@ -114,5 +115,61 @@ export class S3Service {
       Key: key,
     });
     return getSignedUrl(this.client, cmd, { expiresIn: expiresInSeconds });
+  }
+
+  /**
+   * Extrae la key del objeto a partir de la URL pública generada por uploadFile.
+   * Ejemplo: https://bucket.s3.region.amazonaws.com/usuarios/uuid.png → usuarios/uuid.png
+   */
+  private extractKeyFromUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const key = parsed.pathname.startsWith('/')
+        ? parsed.pathname.slice(1)
+        : parsed.pathname;
+      return key || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Elimina un objeto del bucket. Fallos no bloquean el flujo principal.
+   */
+  async deleteFile(url: string): Promise<void> {
+    const key = this.extractKeyFromUrl(url);
+    if (!key) return;
+
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+    } catch {
+      // Silencioso: archivo huérfano posible; no interrumpe la operación
+    }
+  }
+
+  /**
+   * Sube un archivo nuevo y elimina el anterior en segundo plano.
+   * Retorna la URL del archivo nuevo.
+   */
+  async updateFile(
+    previousUrl: string | null | undefined,
+    file: Express.Multer.File,
+    folder: string,
+    idUser: number,
+    idModule: number,
+  ): Promise<{ url: string }> {
+    const uploaded = await this.uploadFile(file, folder, idUser, idModule);
+
+    if (previousUrl) {
+      // Eliminación en segundo plano (no bloquea la respuesta)
+      void this.deleteFile(previousUrl);
+    }
+
+    return uploaded;
   }
 }

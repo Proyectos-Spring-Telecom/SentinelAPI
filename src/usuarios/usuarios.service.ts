@@ -26,6 +26,8 @@ import { MailService } from 'src/mail/mail.service';
 import { JwtService } from '@nestjs/jwt';
 import { Clientes } from 'src/entities/Clientes';
 import { EnumModulos, EstatusEnum } from 'src/common/estatus.enum';
+import { S3Service } from 'src/s3/s3.service';
+import { AuthService } from 'src/auth/auth.service';
 
 @Injectable()
 export class UsuariosService {
@@ -40,6 +42,8 @@ export class UsuariosService {
     private readonly clienteRepository: Repository<Clientes>,
     private readonly emailService: MailService,
     private readonly jwtService: JwtService,
+    private readonly s3Service: S3Service,
+    private readonly authService: AuthService,
   ) { }
 
   //funcion para obtener los clientes hijos
@@ -211,7 +215,7 @@ AND u.Id != ?
   }
 
   //Obtener todos los usuarios
-    // ========================================
+  // ========================================
   // 🔹 OBTENER LISTADO DE USUARIOS
   // ========================================
   async getAllListUsuarios(
@@ -484,6 +488,7 @@ ORDER BY u.Id DESC
   async createUsuario(
     createUsuarioDto: CreateUsuarioDto,
     idUser: string,
+    fileFotoPerfil?: Express.Multer.File,
   ): Promise<ApiCrudResponse> {
     try {
       const existUsuario = await this.usuarioRepository.findOne({
@@ -500,7 +505,19 @@ ORDER BY u.Id DESC
       ); //encriptamos la contraseña
       createUsuarioDto.passwordHash = hashedPassword;
 
-      const newUser = await this.usuarioRepository.create(createUsuarioDto);
+      // Subida a S3 (fuera de la transacción MySQL). Solo se guarda la URL.
+      if (fileFotoPerfil) {
+        const { url } = await this.s3Service.uploadFile(
+          fileFotoPerfil,
+          'usuarios',
+          Number(idUser),
+          EnumModulos.USUARIOS,
+        );
+        createUsuarioDto.fotoPerfil = url;
+      }
+
+      const { permisosIds, ...usuarioData } = createUsuarioDto;
+      const newUser = await this.usuarioRepository.create(usuarioData);
 
       //Activamos su ingreso
       newUser.emailConfirmado = 1;
@@ -508,8 +525,8 @@ ORDER BY u.Id DESC
 
       const userSave = await this.usuarioRepository.save(newUser); //creamos el usuario
 
-      if (createUsuarioDto.permisosIds.length > 0) {
-        const usuariosPermisos = createUsuarioDto.permisosIds.map((permisoId) =>
+      if (permisosIds?.length > 0) {
+        const usuariosPermisos = permisosIds.map((permisoId) =>
           this.usuariosPermisosRepository.create({
             idUsuario: userSave.id,
             idPermiso: permisoId,
@@ -645,6 +662,9 @@ ORDER BY u.Id DESC
         actualizacionPassword: fechaActual,
       });
 
+      // Invalidar todas las sesiones de refresh activas
+      await this.authService.revokeAllRefreshSessionsForUser(Number(id));
+
       //-----Registro en la bitacora----- SUCCESS
       const querylogger = { id: id };
       await this.bitacoraLogger.logToBitacora(
@@ -698,6 +718,7 @@ ORDER BY u.Id DESC
     id: number,
     updateUsuarioDto: UpdateUsuarioDto,
     idUser: string,
+    fileFotoPerfil?: Express.Multer.File,
   ): Promise<ApiCrudResponse> {
     try {
       const usuario = await this.usuarioRepository.findOne({
@@ -718,6 +739,18 @@ ORDER BY u.Id DESC
       }
       updateUsuarioDto.emailConfirmado = EstatusEnum.ACTIVO;
 
+      // Si llega archivo nuevo: subir a S3 y reemplazar URL (elimina anterior en background)
+      if (fileFotoPerfil) {
+        const { url } = await this.s3Service.updateFile(
+          usuario.fotoPerfil,
+          fileFotoPerfil,
+          'usuarios',
+          Number(idUser),
+          EnumModulos.USUARIOS,
+        );
+        updateUsuarioDto.fotoPerfil = url;
+      }
+
       const { permisosIds, ...usuarioUpdate } = updateUsuarioDto;
       // ----- ACTUALIZACIÓN DE USUARIO -----
       await this.usuarioRepository.update(id, usuarioUpdate);
@@ -731,10 +764,10 @@ ORDER BY u.Id DESC
 
       // ----- ACTUALIZACIÓN DE PERMISOS -----
       if (
-        updateUsuarioDto.permisosIds &&
-        Array.isArray(updateUsuarioDto.permisosIds)
+        permisosIds &&
+        Array.isArray(permisosIds)
       ) {
-        const nuevaLista: number[] = updateUsuarioDto.permisosIds.map(Number); // lista nueva de permisos (ej. [1,EnumModulos.USUARIOS,3])
+        const nuevaLista: number[] = permisosIds.map(Number); // lista nueva de permisos (ej. [1,EnumModulos.USUARIOS,3])
 
         // Permisos actuales en BD
         const creadaLista = await this.usuariosPermisosRepository.find({

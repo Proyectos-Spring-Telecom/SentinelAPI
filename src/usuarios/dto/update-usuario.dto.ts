@@ -1,4 +1,3 @@
-
 import {
   IsArray,
   IsDateString,
@@ -10,10 +9,37 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+
+/** Convierte strings de multipart a número */
+const toNumber = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null || value === '') return value;
+  return Number(value);
+};
+
+/** Convierte permisosIds desde JSON string, CSV o array (multipart) */
+const toNumberArray = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null || value === '') return value;
+  if (Array.isArray(value)) return value.map(Number);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(Number);
+    } catch {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map(Number);
+    }
+  }
+  return value;
+};
 
 export class UpdateUsuarioDto {
-  @IsInt()
   @IsOptional()
+  @Transform(toNumber)
+  @IsInt()
   @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
   @ApiProperty({
     description: 'Confirmación de email (0=No, 1=Sí)',
@@ -68,10 +94,15 @@ export class UpdateUsuarioDto {
 
   @IsOptional()
   @IsString()
-  @ApiProperty({ description: 'Foto de perfil', required: false })
+  @ApiProperty({
+    description:
+      'URL de foto de perfil (asignada por el backend tras subir a S3). Preferir campo archivo fotoPerfil.',
+    required: false,
+  })
   fotoPerfil?: string;
 
   @IsOptional()
+  @Transform(toNumber)
   @IsInt()
   @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
   @ApiProperty({
@@ -81,17 +112,26 @@ export class UpdateUsuarioDto {
   estatus?: number = 1;
 
   @IsOptional()
+  @Transform(toNumber)
   @IsInt()
   @ApiProperty({ description: 'Rol asignado', example: 2 })
   idRol?: number;
 
   @IsOptional()
+  @Transform(toNumber)
   @IsInt()
   @ApiProperty({ description: 'Cliente asignado', example: 5 })
   idCliente?: number;
 
   @IsOptional()
+  @Transform(toNumberArray)
   @IsArray()
   @IsNumber({}, { each: true })
+  @ApiProperty({
+    description: 'IDs de permisos (JSON array o CSV en multipart)',
+    example: [1, 2, 3],
+    type: [Number],
+    required: false,
+  })
   permisosIds?: number[];
 }
