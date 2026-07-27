@@ -18,9 +18,14 @@ import { UpdatePermisoDto } from './dto/update-permiso.dto';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { RolesGuard } from 'src/guard/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { UpdatePermisoEstatusDto } from './dto/update-permiso-estatus.dto';
 import { ApiCrudResponse, ApiResponseCommon } from 'src/common/ApiResponse';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @ApiTags('Permisos')
 @ApiBearerAuth('bearer-token')
@@ -77,17 +82,26 @@ export class PermisosController {
   }
 
   @Patch(':id/estatus')
+  @ApiOperation({
+    summary: 'Cambiar estatus de un permiso',
+    description:
+      'Alterna el estatus del permiso: si está activo (1) pasa a inactivo (0) y viceversa. No requiere body.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'ID del permiso',
+    example: 1,
+  })
+  @ApiResponse({ status: 200, description: 'Estatus actualizado exitosamente' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 404, description: 'Permiso no encontrado' })
   async updatePermisoEstatus(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Request() req,
-    @Body() updatePermisoEstatusDto: UpdatePermisoEstatusDto,
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    return await this.permisosService.updateEstatus(
-      +id,
-      idUser,
-      updatePermisoEstatusDto,
-    );
+    return await this.permisosService.updateEstatus(id, idUser);
   }
 
   @Delete(':id')

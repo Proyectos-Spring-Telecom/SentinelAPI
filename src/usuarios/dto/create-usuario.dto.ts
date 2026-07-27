@@ -8,7 +8,6 @@ import {
   IsDateString,
   MaxLength,
   MinLength,
-  IsIn,
   IsArray,
   IsNumber,
   Matches,
@@ -61,22 +60,12 @@ export class CreateUsuarioDto {
   })
   passwordHash: string;
 
-  @Transform(toNumber)
-  @IsInt()
-  @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
-  @ApiProperty({
-    description: 'Confirmación de email (0=No, 1=Sí)',
-    example: 0,
-  })
-  emailConfirmado: number;
-
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
   @ApiProperty({
     description: 'Nombre del usuario',
     example: 'Juan',
-    required: false,
   })
   nombre: string;
 
@@ -127,16 +116,6 @@ export class CreateUsuarioDto {
     required: false,
   })
   fotoPerfil?: string;
-
-  @IsOptional()
-  @Transform(toNumber)
-  @IsInt()
-  @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
-  @ApiProperty({
-    description: 'Estatus del usuario (1=Activo, 0=Inactivo)',
-    example: 1,
-  })
-  estatus?: number = 1;
 
   @Transform(toNumber)
   @IsInt()

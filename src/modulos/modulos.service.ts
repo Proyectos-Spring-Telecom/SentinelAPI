@@ -13,7 +13,6 @@ import { Modulos } from 'src/entities/Modulos';
 import { Repository } from 'typeorm';
 import { Permisos } from 'src/entities/Permisos';
 import { BitacoraLoggerService } from 'src/bitacora/bitacora.service';
-import { UpdateModulosEstatusDto } from './dto/update-modulo-estatus.dto';
 import {
   ApiCrudResponse,
   ApiResponseCommon,
@@ -222,21 +221,24 @@ export class ModulosService {
   async updateModulosStatus(
     id: number,
     idUser: number,
-    updateModulosEstatusDto: UpdateModulosEstatusDto,
   ): Promise<ApiCrudResponse> {
     try {
       const modulo = await this.moduloRepository.findOne({ where: { id: id } });
       if (!modulo) {
         throw new NotFoundException('Modulo no encontrado');
       }
-      const estatus = updateModulosEstatusDto.estatus;
-      await this.moduloRepository.update(id, { estatus: estatus });
+
+      // Toggle: 1 → 0 | 0 → 1
+      const estatusActual = Number(modulo.estatus) === 1 ? 1 : 0;
+      const estatus = estatusActual === 1 ? 0 : 1;
+
+      await this.moduloRepository.update(id, { estatus });
 
       //-----Registro en la bitacora----- SUCCESS
-      const querylogger = { updateModulosEstatusDto };
+      const querylogger = { id, estatusAnterior: estatusActual, estatus };
       await this.bitacoraLogger.logToBitacora(
         'Modulos',
-        `Se actualizo el modulo con ID: ${id} a estatus: ${estatus}`,
+        `Se actualizó el modulo con ID: ${id} a estatus: ${estatus}`,
         'UPDATE',
         querylogger,
         idUser,
@@ -248,7 +250,7 @@ export class ModulosService {
       const result: ApiCrudResponse = {
         status: 'success',
         message: 'Estatus modulo actualizado correctamente',
-        estatus: { estatus: estatus },
+        estatus: { estatus },
         data: {
           id: id,
           nombre: `${modulo.nombre} ${modulo.descripcion} ` || '',
@@ -257,10 +259,10 @@ export class ModulosService {
       return result;
     } catch (error) {
       //-----Registro en la bitacora----- ERROR
-      const querylogger = { updateModulosEstatusDto };
+      const querylogger = { id };
       await this.bitacoraLogger.logToBitacora(
         'Modulos',
-        `Se actualizo el modulo con ID: ${id} a estatus: ${updateModulosEstatusDto.estatus}`,
+        `Error al actualizar el modulo con ID: ${id}`,
         'UPDATE',
         querylogger,
         idUser,

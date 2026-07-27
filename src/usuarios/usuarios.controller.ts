@@ -24,7 +24,6 @@ import {
 import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import { UpdateUsuarioEstatusDto } from './dto/update-usuario-estatus.dto';
 import { UpdateUsuarioContrasena } from './dto/update-usuario-contrasena.dto';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { RolesGuard } from 'src/guard/roles.guard';
@@ -38,7 +37,7 @@ import { usuariosFileFieldsInterceptor } from './usuarios-upload.interceptor';
 @Roles() // Todos los roles pueden acceder por defecto
 @Controller('usuarios')
 export class UsuariosController {
-  constructor(private readonly usuariosService: UsuariosService) {}
+  constructor(private readonly usuariosService: UsuariosService) { }
 
   // ==================== POST ====================
 
@@ -56,7 +55,6 @@ export class UsuariosController {
       required: [
         'userName',
         'passwordHash',
-        'emailConfirmado',
         'nombre',
         'apellidoPaterno',
         'idRol',
@@ -66,7 +64,6 @@ export class UsuariosController {
       properties: {
         userName: { type: 'string', example: 'usuario01' },
         passwordHash: { type: 'string', example: 'P@ssword123' },
-        emailConfirmado: { type: 'number', example: 0 },
         nombre: { type: 'string', example: 'Juan' },
         apellidoPaterno: { type: 'string', example: 'Pérez' },
         apellidoMaterno: { type: 'string', example: 'López' },
@@ -78,7 +75,6 @@ export class UsuariosController {
           example: '[1,2,3]',
           description: 'JSON array o CSV de IDs de permisos',
         },
-        estatus: { type: 'number', example: 1 },
         fotoPerfil: {
           type: 'string',
           format: 'binary',
@@ -122,12 +118,12 @@ export class UsuariosController {
   // ==================== GET ====================
 
   @Get('list')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener lista completa de usuarios',
     description: 'Obtiene todos los usuarios sin paginación según el rol y permisos'
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Lista completa de usuarios obtenida exitosamente',
   })
   @ApiResponse({
@@ -141,7 +137,7 @@ export class UsuariosController {
   }
 
   @Get('list/cliente/:id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener usuarios por cliente específico',
     description: 'Obtiene la lista de usuarios asociados a un cliente específico'
   })
@@ -151,13 +147,13 @@ export class UsuariosController {
     description: 'ID del cliente',
     example: 1
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Lista de usuarios del cliente obtenida exitosamente',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Cliente no encontrado' 
+  @ApiResponse({
+    status: 404,
+    description: 'Cliente no encontrado'
   })
   @ApiResponse({
     status: 401,
@@ -172,7 +168,7 @@ export class UsuariosController {
   }
 
   @Get(':page/:limit')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener usuarios con paginación',
     description: 'Obtiene una lista paginada de usuarios según los parámetros especificados'
   })
@@ -188,8 +184,8 @@ export class UsuariosController {
     description: 'Cantidad de registros por página',
     example: 10
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Usuarios obtenidos exitosamente con paginación',
   })
   @ApiResponse({
@@ -214,7 +210,7 @@ export class UsuariosController {
   }
 
   @Get(':id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener usuario por ID',
     description: 'Obtiene la información detallada de un usuario específico por su ID'
   })
@@ -224,20 +220,20 @@ export class UsuariosController {
     description: 'ID del usuario',
     example: 1
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Usuario encontrado exitosamente'
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Usuario no encontrado' 
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado'
   })
   @ApiResponse({
     status: 401,
     description: 'No autorizado'
   })
   async findOne(
-    @Param('id', ParseIntPipe) id: number, 
+    @Param('id', ParseIntPipe) id: number,
     @Request() req
   ) {
     const idCliente = req.user.idCliente;
@@ -248,69 +244,69 @@ export class UsuariosController {
   // ==================== PATCH ====================
 
   @Patch('estatus/:id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Cambiar estatus del usuario',
-    description: 'Actualiza el estatus de un usuario (activar/desactivar)'
+    description:
+      'Alterna el estatus del usuario: si está activo (1) pasa a inactivo (0) y viceversa. No requiere body.',
   })
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'ID del usuario',
-    example: 1
+    example: 1,
   })
-  @ApiBody({ type: UpdateUsuarioEstatusDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Estatus actualizado exitosamente',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Usuario no encontrado' 
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
   })
   @ApiResponse({
     status: 401,
-    description: 'No autorizado'
+    description: 'No autorizado',
   })
   async changeUsuarioEstatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateUsuarioEstatusDto: UpdateUsuarioEstatusDto,
     @Request() req,
   ): Promise<ApiCrudResponse> {
     const idUser = req.user.userId;
-    return await this.usuariosService.updateUsuarioEstatus(
-      id,
-      updateUsuarioEstatusDto,
-      idUser,
-    );
+    return await this.usuariosService.updateUsuarioEstatus(id, idUser);
   }
 
   @Patch('actualizar/contrasena/:id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Cambiar contraseña de usuario',
-    description: 'Actualiza la contraseña de un usuario específico'
+    description:
+      'Actualiza la contraseña del usuario autenticado. El :id del path debe coincidir con el userId del token.',
   })
   @ApiParam({
     name: 'id',
     type: 'number',
-    description: 'ID del usuario',
-    example: 1
+    description: 'ID del usuario (debe ser el mismo del token JWT)',
+    example: 1,
   })
   @ApiBody({ type: UpdateUsuarioContrasena })
   @ApiResponse({
     status: 200,
     description: 'Contraseña actualizada exitosamente',
   })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Contraseña inválida' 
+  @ApiResponse({
+    status: 400,
+    description: 'Contraseña inválida',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Usuario no encontrado' 
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso denegado - Solo puedes actualizar tu propia contraseña',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
   })
   @ApiResponse({
     status: 401,
-    description: 'No autorizado'
+    description: 'No autorizado',
   })
   async updateContrasena(
     @Param('id', ParseIntPipe) id: number,
@@ -343,7 +339,6 @@ export class UsuariosController {
     schema: {
       type: 'object',
       properties: {
-        emailConfirmado: { type: 'number', example: 1 },
         nombre: { type: 'string', example: 'Juan' },
         apellidoPaterno: { type: 'string', example: 'Pérez' },
         apellidoMaterno: { type: 'string', example: 'López' },
@@ -355,7 +350,6 @@ export class UsuariosController {
           example: '[1,2,3]',
           description: 'JSON array o CSV de IDs de permisos',
         },
-        estatus: { type: 'number', example: 1 },
         fotoPerfil: {
           type: 'string',
           format: 'binary',
@@ -400,8 +394,8 @@ export class UsuariosController {
   // ==================== DELETE ====================
 
   @Delete(':id')
-  @Roles(1) // Solo SuperAdministrador puede eliminar usuarios
-  @ApiOperation({ 
+  @Roles() // Solo SuperAdministrador puede eliminar usuarios
+  @ApiOperation({
     summary: 'Eliminar usuario',
     description: 'Elimina un usuario del sistema'
   })
@@ -411,17 +405,17 @@ export class UsuariosController {
     description: 'ID del usuario a eliminar',
     example: 1
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Usuario eliminado exitosamente',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Usuario no encontrado' 
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado'
   })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'No se puede eliminar el usuario' 
+  @ApiResponse({
+    status: 400,
+    description: 'No se puede eliminar el usuario'
   })
   @ApiResponse({
     status: 401,

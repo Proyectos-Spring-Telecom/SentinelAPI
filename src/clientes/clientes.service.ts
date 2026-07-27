@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
-import { UpdateClienteEstatusDto } from './dto/update-clientes-estatus.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Clientes } from 'src/entities/Clientes';
@@ -20,6 +19,14 @@ import {
 import {
   EnumModulos,
 } from 'src/common/estatus.enum';
+import { S3Service } from 'src/s3/s3.service';
+
+export type ClienteDocumentFiles = {
+  constanciaSituacionFiscal?: Express.Multer.File;
+  comprobanteDomicilio?: Express.Multer.File;
+  actaConstitutiva?: Express.Multer.File;
+  logotipo?: Express.Multer.File;
+};
 
 @Injectable()
 export class ClientesService {
@@ -27,6 +34,7 @@ export class ClientesService {
     @InjectRepository(Clientes)
     private readonly clienteRepository: Repository<Clientes>,
     private readonly bitacoraLogger: BitacoraLoggerService,
+    private readonly s3Service: S3Service,
   ) { }
 
   // ========================================
@@ -35,6 +43,7 @@ export class ClientesService {
   async createCliente(
     createClienteDto: CreateClienteDto,
     idUser: number,
+    files?: ClienteDocumentFiles,
   ): Promise<ApiCrudResponse> {
     try {
       //Buscamos al cliente y verificamos
@@ -49,8 +58,50 @@ export class ClientesService {
         );
       }
 
+      // Subida de documentos a S3 (folder clientes). Solo se guarda la URL.
+      if (files?.constanciaSituacionFiscal) {
+        const { url } = await this.s3Service.uploadFile(
+          files.constanciaSituacionFiscal,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        createClienteDto.constanciaSituacionFiscal = url;
+      }
+      if (files?.comprobanteDomicilio) {
+        const { url } = await this.s3Service.uploadFile(
+          files.comprobanteDomicilio,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        createClienteDto.comprobanteDomicilio = url;
+      }
+      if (files?.actaConstitutiva) {
+        const { url } = await this.s3Service.uploadFile(
+          files.actaConstitutiva,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        createClienteDto.actaConstitutiva = url;
+      }
+      if (files?.logotipo) {
+        const { url } = await this.s3Service.uploadFile(
+          files.logotipo,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        createClienteDto.logotipo = url;
+      }
+
       //Creamos el nuevo cliente
-      const clienteData = await this.clienteRepository.create(createClienteDto);
+      const clienteData = this.clienteRepository.create({
+        ...createClienteDto,
+        idPadre: createClienteDto.idPadre ?? 1,
+        estatus: 1,
+      });
       const clienteCreado = await this.clienteRepository.save(clienteData);
 
       //-----Registro en la bitacora----- SUCCESS
@@ -433,6 +484,7 @@ ORDER BY Id ASC
     id: number,
     idUser: number,
     updateClienteDto: UpdateClienteDto,
+    files?: ClienteDocumentFiles,
   ): Promise<ApiCrudResponse> {
     try {
       //Buscamos al cliente y verificamos
@@ -443,6 +495,48 @@ ORDER BY Id ASC
         throw new NotFoundException(
           `El cliente con ID: ${id} no fue encontrado.`,
         );
+      }
+
+      // Documentos nuevos: subir a S3 y reemplazar URL (elimina anterior en background)
+      if (files?.constanciaSituacionFiscal) {
+        const { url } = await this.s3Service.updateFile(
+          Cliente.constanciaSituacionFiscal,
+          files.constanciaSituacionFiscal,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        updateClienteDto.constanciaSituacionFiscal = url;
+      }
+      if (files?.comprobanteDomicilio) {
+        const { url } = await this.s3Service.updateFile(
+          Cliente.comprobanteDomicilio,
+          files.comprobanteDomicilio,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        updateClienteDto.comprobanteDomicilio = url;
+      }
+      if (files?.actaConstitutiva) {
+        const { url } = await this.s3Service.updateFile(
+          Cliente.actaConstitutiva,
+          files.actaConstitutiva,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        updateClienteDto.actaConstitutiva = url;
+      }
+      if (files?.logotipo) {
+        const { url } = await this.s3Service.updateFile(
+          Cliente.logotipo,
+          files.logotipo,
+          'clientes',
+          Number(idUser),
+          EnumModulos.CLIENTES,
+        );
+        updateClienteDto.logotipo = url;
       }
 
       //Actualizamos datos del cliente
@@ -505,8 +599,6 @@ ORDER BY Id ASC
   async updateClienteStatus(
     id: number,
     idUser: number,
-    cliente: number,
-    updateClienteEstatusDto: UpdateClienteEstatusDto,
   ): Promise<ApiCrudResponse> {
     try {
       //Buscamos al cliente y verificamos
@@ -520,21 +612,22 @@ ORDER BY Id ASC
       //Obtenemos los clientes hijos
       const { ids, placeholders } = await this.clienteHijos(id);
 
-      //Obtenemos el valor de estatus
-      const estatus = updateClienteEstatusDto.estatus;
+      // Toggle: 1 → 0 | 0 → 1
+      const estatusActual = Number(cliente.estatus) === 1 ? 1 : 0;
+      const estatus = estatusActual === 1 ? 0 : 1;
 
       //Hacemos eliminado logico al cliente padre e hijos
       await this.clienteRepository.query(
         `
         UPDATE Clientes
-        SET Estatus = ${estatus}
-        WHERE Id IN (${placeholders})   -- 🔹 aquí colocas el ID del cliente que quieres consultar
+        SET Estatus = ?
+        WHERE Id IN (${placeholders})
         `,
-        [...ids],
+        [estatus, ...ids],
       );
 
       //-----Registro en la bitacora----- SUCCESS
-      const querylogger = { updateClienteEstatusDto };
+      const querylogger = { id, estatusAnterior: estatusActual, estatus };
       await this.bitacoraLogger.logToBitacora(
         'Clientes',
         `El estatus del cliente con ID ${id} se modificó exitosamente a: ${estatus}.`,
@@ -558,10 +651,10 @@ ORDER BY Id ASC
       return result;
     } catch (error) {
       //-----Registro en la bitacora----- ERROR
-      const querylogger = { updateClienteEstatusDto };
+      const querylogger = { id };
       await this.bitacoraLogger.logToBitacora(
         'Clientes',
-        `Se cambió el estatus del cliente con ID: ${id} a estatus: ${updateClienteEstatusDto.estatus}.`,
+        `Error al cambiar el estatus del cliente con ID: ${id}.`,
         'UPDATE',
         querylogger,
         idUser,

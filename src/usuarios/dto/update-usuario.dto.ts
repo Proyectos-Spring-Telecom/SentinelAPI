@@ -1,7 +1,6 @@
 import {
   IsArray,
   IsDateString,
-  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -37,16 +36,6 @@ const toNumberArray = ({ value }: { value: unknown }) => {
 };
 
 export class UpdateUsuarioDto {
-  @IsOptional()
-  @Transform(toNumber)
-  @IsInt()
-  @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
-  @ApiProperty({
-    description: 'Confirmación de email (0=No, 1=Sí)',
-    example: 0,
-  })
-  emailConfirmado?: number;
-
   @IsOptional()
   @IsString()
   @MaxLength(100)
@@ -100,16 +89,6 @@ export class UpdateUsuarioDto {
     required: false,
   })
   fotoPerfil?: string;
-
-  @IsOptional()
-  @Transform(toNumber)
-  @IsInt()
-  @IsIn([0, 1], { message: 'Solo se permite 0 o 1' })
-  @ApiProperty({
-    description: 'Estatus del usuario (1=Activo, 0=Inactivo)',
-    example: 1,
-  })
-  estatus?: number = 1;
 
   @IsOptional()
   @Transform(toNumber)

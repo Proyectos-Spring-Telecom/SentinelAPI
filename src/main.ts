@@ -19,8 +19,8 @@ async function bootstrap() {
     .setTitle('Sentinel API')
     .setDescription('Documentación de la API de SENTINEL')
     .setVersion('1.0')
-    .addServer('http://localhost:3010', 'Servidor Local')
-    .addServer('https://springtelecom.mx/sentinelAPI', 'Servidor Prod')
+    .addServer('http://localhost:3001', 'Servidor Local.')
+    .addServer('https://springtelecom.mx/sentinelAPI', 'Producción.  ')
     .addBearerAuth(
       {
         type: 'http',

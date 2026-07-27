@@ -1,6 +1,7 @@
 //Servicio usuario
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   Injectable,
   InternalServerErrorException,
@@ -11,7 +12,6 @@ import { Repository } from 'typeorm';
 import { Usuarios } from 'src/entities/Usuarios';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import { UpdateUsuarioEstatusDto } from './dto/update-usuario-estatus.dto';
 import * as bcrypt from 'bcrypt';
 import {
   ApiCrudResponse,
@@ -25,7 +25,7 @@ import { UpdateUsuarioContrasena } from './dto/update-usuario-contrasena.dto';
 import { MailService } from 'src/mail/mail.service';
 import { JwtService } from '@nestjs/jwt';
 import { Clientes } from 'src/entities/Clientes';
-import { EnumModulos, EstatusEnum } from 'src/common/estatus.enum';
+import { EnumModulos } from 'src/common/estatus.enum';
 import { S3Service } from 'src/s3/s3.service';
 import { AuthService } from 'src/auth/auth.service';
 
@@ -517,11 +517,11 @@ ORDER BY u.Id DESC
       }
 
       const { permisosIds, ...usuarioData } = createUsuarioDto;
-      const newUser = await this.usuarioRepository.create(usuarioData);
-
-      //Activamos su ingreso
-      newUser.emailConfirmado = 1;
-      newUser.estatus = 1;
+      const newUser = this.usuarioRepository.create({
+        ...usuarioData,
+        emailConfirmado: 1,
+        estatus: 1,
+      });
 
       const userSave = await this.usuarioRepository.save(newUser); //creamos el usuario
 
@@ -611,6 +611,12 @@ ORDER BY u.Id DESC
     updateUsuarioContrasena: UpdateUsuarioContrasena,
   ) {
     try {
+      if (Number(id) !== Number(idUser)) {
+        throw new ForbiddenException(
+          'Solo puedes actualizar tu propia contraseña.',
+        );
+      }
+
       const usuario = await this.usuarioRepository.findOne({
         where: { id: id },
       });
@@ -647,19 +653,13 @@ ORDER BY u.Id DESC
         return n < 10 ? '0' + n : n;
       }
 
-      const ahora = new Date();
-      const desfaseMs = -6 * 60 * 60 * 1000; // -6 horas en milisegundos
-      const fechaDesfasada = new Date(ahora.getTime() + desfaseMs);
-
-      const fechaActual = `${fechaDesfasada.getFullYear()}-${pad(fechaDesfasada.getMonth() + 1)}-${pad(fechaDesfasada.getDate())} ${pad(fechaDesfasada.getHours())}:${pad(fechaDesfasada.getMinutes())}:${pad(fechaDesfasada.getSeconds())}`;
-
       //actualiza en usuario contraseña
       await this.usuarioRepository.update(id, {
         passwordHash: updateUsuarioContrasena.passwordNueva,
       });
 
       await this.usuarioRepository.update(id, {
-        actualizacionPassword: fechaActual,
+        actualizacionPassword: new Date().toISOString(),
       });
 
       // Invalidar todas las sesiones de refresh activas
@@ -737,7 +737,6 @@ ORDER BY u.Id DESC
             'No se encontró el cliente especificado.',
           );
       }
-      updateUsuarioDto.emailConfirmado = EstatusEnum.ACTIVO;
 
       // Si llega archivo nuevo: subir a S3 y reemplazar URL (elimina anterior en background)
       if (fileFotoPerfil) {
@@ -876,11 +875,10 @@ ORDER BY u.Id DESC
   }
 
   // ========================================
-  // 🔹 ACTUALIZAR ESTATUS DEL USUARIO
+  // 🔹 ACTUALIZAR ESTATUS DEL USUARIO (toggle 1 ↔ 0)
   // ========================================
   async updateUsuarioEstatus(
     id: number,
-    updateUsuarioEstatusDto: UpdateUsuarioEstatusDto,
     idUser: number,
   ): Promise<ApiCrudResponse> {
     try {
@@ -890,9 +888,11 @@ ORDER BY u.Id DESC
       if (!usuario) {
         throw new NotFoundException(`No se encontró un usuario con ID: ${id}.`);
       }
-      const { estatus } = updateUsuarioEstatusDto;
 
-      await this.usuarioRepository.update(id, { estatus: estatus });
+      const estatusActual = Number(usuario.estatus) === 1 ? 1 : 0;
+      const estatus = estatusActual === 1 ? 0 : 1;
+
+      await this.usuarioRepository.update(id, { estatus });
       const usuarioResult = await this.usuarioRepository.findOne({
         where: { id: id },
       });
@@ -900,7 +900,7 @@ ORDER BY u.Id DESC
         throw new NotFoundException(`No se encontró un usuario con ID: ${id}.`);
       }
       //-----Registro en la bitacora----- SUCCESS
-      const querylogger = { updateUsuarioEstatusDto };
+      const querylogger = { id, estatusAnterior: estatusActual, estatus };
       await this.bitacoraLogger.logToBitacora(
         'Usuarios',
         `Se cambió el estatus del usuario ${usuarioResult.nombre} con ID: ${id} a estatus: ${estatus}.`,
@@ -927,10 +927,10 @@ ORDER BY u.Id DESC
       return result;
     } catch (error) {
       //-----Registro en la bitacora----- ERROR
-      const querylogger = { updateUsuarioEstatusDto };
+      const querylogger = { id };
       await this.bitacoraLogger.logToBitacora(
         'Usuarios',
-        `Se cambió el estatus del usuario con ID: ${id} a estatus: ${updateUsuarioEstatusDto.estatus}.`,
+        `Se intentó cambiar el estatus del usuario con ID: ${id}.`,
         'UPDATE',
         querylogger,
         idUser,

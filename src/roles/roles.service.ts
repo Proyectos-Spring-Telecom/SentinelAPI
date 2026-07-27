@@ -13,7 +13,6 @@ import { Repository, Not } from 'typeorm';
 import { Roles } from 'src/entities/Roles';
 import { BitacoraLoggerService } from 'src/bitacora/bitacora.service';
 import { ApiCrudResponse, ApiResponseCommon, EstatusEnumBitcora } from 'src/common/ApiResponse';
-import { UpdateRolEstatusDto } from './dto/update-rol.dto';
 import { Response } from 'express';
 
 @Injectable()
@@ -223,23 +222,24 @@ export class RolesService {
   async updateEstatus(
     id: number,
     idUser: number,
-    updateRolEstatusDto: UpdateRolEstatusDto,
   ): Promise<ApiCrudResponse> {
     try {
       const rol = await this.rolesRepository.findOne({
         where: { id: id },
       });
       if (!rol) throw new NotFoundException('Rol no encontrado');
-      //Actualiza
-      const rolResult = await this.rolesRepository.update(id, {
-        estatus: updateRolEstatusDto.estatus,
-      });
+
+      // Toggle: 1 → 0 | 0 → 1
+      const estatusActual = Number(rol.estatus) === 1 ? 1 : 0;
+      const estatus = estatusActual === 1 ? 0 : 1;
+
+      await this.rolesRepository.update(id, { estatus });
 
       // --- Registro en la bitácora --- SUCCESS
-      const querylogger = { updateRolEstatusDto };
+      const querylogger = { id, estatusAnterior: estatusActual, estatus };
       await this.bitacoraLogger.logToBitacora(
         'Roles',
-        `Se actualizo a estatus ${updateRolEstatusDto.estatus} del rol: ${rol.nombre}`,
+        `Se actualizó a estatus ${estatus} del rol: ${rol.nombre}`,
         'UPDATE',
         querylogger,
         idUser,
@@ -251,7 +251,7 @@ export class RolesService {
       const result: ApiCrudResponse = {
         status: 'success',
         message: 'Estatus rol actualizado correctamente',
-        estatus: { estatus: updateRolEstatusDto.estatus },
+        estatus: { estatus },
         data: {
           id: id,
           nombre: `${rol.nombre} ${rol.descripcion} ` || '',
@@ -260,10 +260,10 @@ export class RolesService {
       return result;
     } catch (error) {
       // --- Registro en la bitácora --- ERROR
-      const querylogger = { updateRolEstatusDto };
+      const querylogger = { id };
       await this.bitacoraLogger.logToBitacora(
         'Roles',
-        `Se actualizo a estatus ${updateRolEstatusDto.estatus} del rol con ID: ${id}`,
+        `Error al actualizar el estatus del rol con ID: ${id}`,
         'UPDATE',
         querylogger,
         idUser,

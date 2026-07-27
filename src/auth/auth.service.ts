@@ -401,9 +401,8 @@ export class AuthService {
         throw new UnauthorizedException('Credenciales inválidas');
       }
 
-      const { fechaActual } = await horaDesfasada();
       await this.usuariosRepository.update(user.id, {
-        ultimoLogin: fechaActual,
+        ultimoLogin: new Date().toISOString(),
       });
 
       const token = this.authTokensService.signAccessToken(user);
@@ -713,12 +712,6 @@ Muchas gracias por su preferencia.`;
       });
       if (!user) throw new BadRequestException('Usuario no encontrado');
 
-      //Generamos el codigo
-      const codigo = await this.generarCodigo(
-        user.id,
-        TipoCodigoAutenticacion.RECUPERACION_CONTRASENA,
-      );
-
       //Generamos el payload para el tokenn
       const payload = {
         id: user.id,
@@ -734,9 +727,8 @@ Muchas gracias por su preferencia.`;
         user.userName,
         name,
         token,
-        codigo,
       );
-      return `Se ha enviado un correo con el codigo.`;
+      return `Se ha enviado un correo para restablecer la contraseña.`;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
