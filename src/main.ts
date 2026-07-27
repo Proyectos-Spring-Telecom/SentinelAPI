@@ -16,8 +16,8 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('Sentinel API')
-    .setDescription('Documentación de la API de SENTINEL')
+    .setTitle('Rondines API')
+    .setDescription('Documentación de la API de Rondines')
     .setVersion('1.0')
     .addServer('http://localhost:3001', 'Servidor Local.')
     .addServer('https://springtelecom.mx/sentinelAPI', 'Producción.  ')
