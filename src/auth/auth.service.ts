@@ -727,7 +727,7 @@ Muchas gracias por su preferencia.`;
 
       //Generamos el token
       const token = this.jwtService.sign(payload, {
-        expiresIn: `${process.env.JWT_CONFIRMACION}`,
+        expiresIn: `${process.env.JWT_CONFIRMACION}` as any,
       });
       const name = `${user.nombre} ${user.apellidoPaterno} ${user.apellidoMaterno}`;
       await this.emailService.sendResetPasswordEmail(
@@ -818,7 +818,7 @@ Muchas gracias por su preferencia.`;
         email: user.userName,
       };
       const token = this.jwtService.sign(payload, {
-        expiresIn: `${process.env.JWT_CONFIRMACION}`,
+        expiresIn: `${process.env.JWT_CONFIRMACION}` as any,
       });
       const name = `${user.nombre} ${user.apellidoPaterno} ${user.apellidoMaterno}`;
       await this.emailService.sendConfirmationEmail(

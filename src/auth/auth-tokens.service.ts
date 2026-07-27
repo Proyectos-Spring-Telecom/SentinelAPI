@@ -43,7 +43,7 @@ export class AuthTokensService {
   signAccessToken(user: Usuarios): string {
     const payload = this.buildAccessPayload(user);
     return this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN'),
+      expiresIn: this.configService.get('JWT_EXPIRES_IN') as any,
     });
   }
 
@@ -64,7 +64,7 @@ export class AuthTokensService {
     };
 
     const token = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
+      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN') as any,
     });
 
     const decoded = this.jwtService.decode(token) as { exp: number };
